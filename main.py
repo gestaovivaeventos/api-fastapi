@@ -14,7 +14,8 @@ def conectar_pg():
         database=os.getenv("PG_DB"),
         user=os.getenv("PG_USER"),
         password=os.getenv("PG_PASSWORD"),
-        cursor_factory=RealDictCursor
+        cursor_factory=RealDictCursor,
+        connect_timeout=100  # Timeout de conexão em segundos
     )
 
 @app.get("/dados")
@@ -22,6 +23,9 @@ def obter_dados():
     try:
         conn = conectar_pg()
         cursor = conn.cursor()
+
+        # Definir o timeout para execução da consulta
+        cursor.execute("SET statement_timeout = '30000';")  # Timeout de execução em milissegundos (30 segundos)
 
         # Query com múltiplas linhas usando triple-quoted string
         query = """
