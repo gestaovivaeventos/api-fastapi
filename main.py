@@ -22,7 +22,7 @@ def obter_dados():
     try:
         conn = conectar_pg()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tb_fundo")  # Edite aqui
+        cursor.execute("SELECT * FROM tb_unidade")  # Edite aqui
         dados = cursor.fetchall()
         cursor.close()
         conn.close()
