@@ -15,20 +15,20 @@ def conectar_pg():
         user=os.getenv("PG_USER"),
         password=os.getenv("PG_PASSWORD"),
         cursor_factory=RealDictCursor,
-        connect_timeout=100  # Timeout de conexão em segundos
+        connect_timeout=180  # Aumentando o timeout da conexão para 3 minutos
     )
 
 @app.get("/dados")
-def obter_dados():
+def obter_dados(limit: int = 100, offset: int = 0):
     try:
         conn = conectar_pg()
         cursor = conn.cursor()
 
-        # Definir o timeout para execução da consulta
-        cursor.execute("SET statement_timeout = '30000';")  # Timeout de execução em milissegundos (30 segundos)
+        # Definindo o timeout de execução da consulta para 2 minutos
+        cursor.execute("SET statement_timeout = '120000';")  # Timeout de 2 minutos (120000ms)
 
-        # Query com múltiplas linhas usando triple-quoted string
-        query = """
+        # Consulta SQL com paginação
+        query = f"""
         SELECT
             CASE
                 WHEN u.nm_unidade = 'Campos' THEN 'Itaperuna Muriae'
@@ -95,6 +95,7 @@ def obter_dados():
             )
         ORDER BY
             i.dt_cadastro
+        LIMIT {limit} OFFSET {offset};  -- Paginação
         """
 
         cursor.execute(query)
