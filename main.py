@@ -14,31 +14,18 @@ def conectar_pg():
         database=os.getenv("PG_DB"),
         user=os.getenv("PG_USER"),
         password=os.getenv("PG_PASSWORD"),
-        cursor_factory=RealDictCursor,
-        connect_timeout=180  # Aumentando o timeout da conexão para 3 minutos
+        cursor_factory=RealDictCursor
     )
 
 @app.get("/dados")
-def obter_dados(limit: int = 100, offset: int = 0):
+def obter_dados():
     try:
         conn = conectar_pg()
         cursor = conn.cursor()
-
-        # Definindo o timeout para execução da consulta para 2 minutos
-        cursor.execute("SET statement_timeout = '120000';")  # Timeout de 2 minutos (120000ms)
-
-        # Query simplificada
-        query = f"""
-        SELECT *
-        FROM tb_fundo
-        LIMIT {limit} OFFSET {offset};  -- Paginação
-        """
-
-        cursor.execute(query)
+        cursor.execute("SELECT * FROM tb_fundo")  # Edite aqui
         dados = cursor.fetchall()
         cursor.close()
         conn.close()
         return dados
-
     except Exception as e:
         return {"erro": str(e)}
