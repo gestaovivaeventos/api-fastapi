@@ -28,7 +28,7 @@ def obter_dados(limit: int = 100, offset: int = 0):
         cursor.execute("SET statement_timeout = '120000';")  # Timeout de 2 minutos (120000ms)
 
         # Consulta SQL com paginação
-        query = f"""
+        query = """
         SELECT
             CASE
                 WHEN u.nm_unidade = 'Campos' THEN 'Itaperuna Muriae'
