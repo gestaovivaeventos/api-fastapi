@@ -1,4 +1,4 @@
-fastapi 
-uvicorn 
-psycopg2-binary 
-python-dotenv
+fastapi
+gunicorn
+sqlalchemy
+psycopg2-binary
