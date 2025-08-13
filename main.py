@@ -1,14 +1,17 @@
 from fastapi import FastAPI
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from psycopg2.pool import SimpleConnectionPool
 import os
 from dotenv import load_dotenv
 
 app = FastAPI()
 load_dotenv()
-
-def conectar_pg():
-    return psycopg2.connect(
+def init_pool() -> SimpleConnectionPool:
+    """Initialize PostgreSQL connection pool."""
+    return SimpleConnectionPool(
+        minconn=1,
+        maxconn=10,
         host=os.getenv("PG_HOST"),
         port=os.getenv("PG_PORT"),
         database=os.getenv("PG_DB"),
@@ -17,14 +20,27 @@ def conectar_pg():
         cursor_factory=RealDictCursor
     )
 
+
+@app.on_event("startup")
+def startup_event() -> None:
+    """Create the connection pool when the application starts."""
+    app.state.pool = init_pool()
+
+
+@app.on_event("shutdown")
+def shutdown_event() -> None:
+    """Close all connections when the application stops."""
+    pool = getattr(app.state, "pool", None)
+    if pool:
+        pool.closeall()
+
 @app.get("/dados")
 def obter_dados():
     try:
-        conn = conectar_pg()
-        cursor = conn.cursor()
-
-        # Query com múltiplas linhas usando triple-quoted string
-        query = """
+		conn = app.state.pool.getconn()
+        try:
+            # Query com múltiplas linhas usando triple-quoted string
+            query = """
         SELECT
 	case
 when u.nm_unidade = 'Campos' then 'Itaperuna Muriae'
@@ -50,38 +66,7 @@ end as nm_unidade,
 		WHEN f.situacao = 9 THEN 'Unificado'
 		WHEN f.situacao = 10 THEN 'Rescindindo'
 		WHEN f.situacao = 11 THEN 'Rescindido'
-		WHEN f.situacao = 12 THEN 'Realizado'
-		WHEN f.situacao = 13 THEN 'Desistente'
-		WHEN f.situacao = 14 THEN 'Pendente'
-	END AS situacao_fundo,
-	CASE
-		WHEN (
-			f.dt_contrato IS NULL
-			OR f.dt_contrato > f.dt_cadastro
-		) THEN f.dt_cadastro
-		WHEN f.dt_contrato IS NOT NULL THEN f.dt_contrato
-	END AS dt_contrato_fundo,
-    f.dt_cadastro AS dt_cadastro,
-	c.nm_curso AS curso_fundo,
-	COUNT(i.id) AS integrantes_ativos,
-	f.num_alunos_turma AS tat_inicial,
-	f.integrantes_previstos_contrato AS mac_inicial,
-	f.vl_orcamento_contrato AS maf_inicial,
-	f.tat_replanejado,
-	f.mac_replanejado,
-	f.maf_replanejado,
-	CASE 
-	WHEN us.enabled IS true THEN us.nome 
-   ELSE null 
-   END AS consultor_relacionamento,
-    CASE
-	WHEN f.tipocliente_id = '7' THEN 'EMPRESARIAL'
-	WHEN f.tipocliente_id = '14' THEN 'FRANQUIAS'
-	WHEN f.tipocliente_id = '15' THEN 'FUNDO DE FORMATURA'
-	WHEN f.tipocliente_id = '16' THEN 'OUTROS'
-	END AS tipo_cliente_fundo,
-	fc.id AS id_juncao
-FROM
+@@ -85,33 +103,33 @@ FROM
 	tb_fundo f
 	JOIN tb_unidade u ON u.id = f.unidade_id
 	LEFT JOIN tb_integrante i ON i.fundo_id = f.id
@@ -106,12 +91,11 @@ GROUP BY
 ORDER BY
 	u.nm_unidade
         """
-
-        cursor.execute(query)
-        dados = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return dados
-
+			with conn.cursor() as cursor:
+                cursor.execute(query)
+                dados = cursor.fetchall()
+            return dados
+        finally:
+            app.state.pool.putconn(conn)
     except Exception as e:
         return {"erro": str(e)}
