@@ -1,14 +1,19 @@
 from fastapi import FastAPI
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from psycopg2.pool import SimpleConnectionPool
 import os
 from dotenv import load_dotenv
 
 app = FastAPI()
 load_dotenv()
 
-def conectar_pg():
-    return psycopg2.connect(
+
+def init_pool() -> SimpleConnectionPool:
+    """Initialize PostgreSQL connection pool."""
+    return SimpleConnectionPool(
+        minconn=1,
+        maxconn=10,
         host=os.getenv("PG_HOST"),
         port=os.getenv("PG_PORT"),
         database=os.getenv("PG_DB"),
@@ -17,14 +22,27 @@ def conectar_pg():
         cursor_factory=RealDictCursor
     )
 
+
+@app.on_event("startup")
+def startup_event() -> None:
+    """Create the connection pool when the application starts."""
+    app.state.pool = init_pool()
+
+
+@app.on_event("shutdown")
+def shutdown_event() -> None:
+    """Close all connections when the application stops."""
+    pool = getattr(app.state, "pool", None)
+    if pool:
+        pool.closeall()
+
 @app.get("/dados")
 def obter_dados():
     try:
-        conn = conectar_pg()
-        cursor = conn.cursor()
-
-        # Query com múltiplas linhas usando triple-quoted string
-        query = """
+        conn = app.state.pool.getconn()
+        try:
+            # Query com múltiplas linhas usando triple-quoted string
+            query = """
         SELECT
 	case
 when u.nm_unidade = 'Campos' then 'Itaperuna Muriae'
@@ -107,11 +125,11 @@ ORDER BY
 	u.nm_unidade
         """
 
-        cursor.execute(query)
-        dados = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return dados
-
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                dados = cursor.fetchall()
+            return dados
+        finally:
+            app.state.pool.putconn(conn)
     except Exception as e:
         return {"erro": str(e)}
