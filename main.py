@@ -1,18 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import SimpleConnectionPool
 import os
 from dotenv import load_dotenv
 
-app = FastAPI()
-
-# Carregar as variáveis de ambiente do arquivo .env
+# Carrega as variáveis de ambiente (útil para testes locais)
 load_dotenv()
 
-def init_pool() -> SimpleConnectionPool:
-    """Inicializa o pool de conexões com PostgreSQL."""
-    return SimpleConnectionPool(
+# --- MUDANÇA 1: INICIALIZAÇÃO DO POOL ---
+# O pool de conexões é criado aqui, de forma global e mais segura.
+pool = None
+try:
+    pool = SimpleConnectionPool(
         minconn=1,
         maxconn=10,
         host=os.getenv("PG_HOST"),
@@ -22,27 +22,36 @@ def init_pool() -> SimpleConnectionPool:
         password=os.getenv("PG_PASSWORD"),
         cursor_factory=RealDictCursor
     )
+except psycopg2.OperationalError as e:
+    # Se falhar aqui (ex: firewall, credenciais erradas), o erro aparecerá nos logs da Vercel.
+    print(f"ERRO CRÍTICO: Falha ao inicializar o pool de conexões. {e}")
 
-@app.on_event("startup")
-def startup_event() -> None:
-    """Cria o pool de conexões quando a aplicação inicia."""
-    app.state.pool = init_pool()
 
-@app.on_event("shutdown")
-def shutdown_event() -> None:
-    """Fecha todas as conexões quando a aplicação para."""
-    pool = getattr(app.state, "pool", None)
-    if pool:
-        pool.closeall()
+app = FastAPI()
 
+
+@app.get("/")
+def health_check():
+    """Endpoint para verificar se a API está no ar."""
+    return {"status": "ok"}
+
+
+# --- MUDANÇA 2: ESTRUTURA DO ENDPOINT ---
 @app.get("/dados")
 def obter_dados():
-    try:
-        # Obter uma conexão do pool
-        conn = app.state.pool.getconn()
+    # Verifica se o pool de conexões foi criado com sucesso.
+    if not pool:
+        raise HTTPException(
+            status_code=503,
+            detail="Serviço indisponível: pool de conexões com o banco de dados não foi inicializado."
+        )
 
-        try:
-            # Query SQL com múltiplas linhas e formatação melhorada
+    conn = None
+    try:
+        # Pega uma conexão do pool.
+        conn = pool.getconn()
+        with conn.cursor() as cursor:
+            # Sua query SQL original foi mantida aqui.
             query = """
                 SELECT
                     CASE
@@ -115,18 +124,16 @@ def obter_dados():
                 ORDER BY
                     i.dt_cadastro
             """
-
-            # Executando a query
-            with conn.cursor() as cursor:
-                cursor.execute(query)
-                dados = cursor.fetchall()
-
-            return dados
-
-        finally:
-            # Devolve a conexão ao pool
-            app.state.pool.putconn(conn)
+            cursor.execute(query)
+            dados = cursor.fetchall()
+        
+        return dados
 
     except Exception as e:
-        # Retorna erro, caso haja
-        return {"erro": str(e)}
+        # Retorna um erro HTTP 500 claro se algo der errado.
+        raise HTTPException(status_code=500, detail=f"Erro ao consultar o banco de dados: {e}")
+        
+    finally:
+        # Garante que a conexão SEMPRE seja devolvida ao pool.
+        if conn:
+            pool.putconn(conn)
