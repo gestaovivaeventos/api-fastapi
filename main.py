@@ -40,7 +40,10 @@ def obter_dados(limit: int = 5000, offset: int = 0): # Adiciona parâmetros de p
                     CASE WHEN u.nm_unidade = 'Campos' THEN 'Itaperuna Muriae' ELSE u.nm_unidade END AS nm_unidade,
                     i.id AS codigo_integrante, i.nm_integrante,
                     CASE WHEN f.is_fundo_assessoria_pura_convertido IS TRUE THEN f.dt_conversao_ass_pura WHEN f.is_fundo_assessoria_pura_convertido IS FALSE THEN i.dt_cadastro END AS dt_cadastro_integrante,
-                    f.id AS id_fundo, f.nm_fundo AS nm_fundo, c.nm_curso AS curso_fundo, '' AS tp_servico,
+                    f.id AS id_fundo, f.nm_fundo AS nm_fundo, c.nm_curso AS curso_fundo, CASE WHEN f.tp_servico = '1' THEN 'Pacote'
+		WHEN f.tp_servico = '2' THEN 'Assessoria'
+		WHEN f.tp_servico = '3' THEN 'Super Integrada'
+	END AS tp_servico,
                     CASE WHEN (f.dt_contrato IS NULL OR f.dt_contrato > f.dt_cadastro) THEN f.dt_cadastro WHEN f.dt_contrato IS NOT NULL THEN f.dt_contrato END AS dt_contrato,
                     f.dt_cadastro AS dt_cadastro_fundo, '' AS total_lancamentos, fc.vl_plano AS vl_plano, '' AS cadastrado_por,
                     CASE WHEN us.cpf IS NULL THEN us.nome ELSE NULL END AS indicado_por,
