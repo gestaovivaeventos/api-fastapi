@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware # <<< 1. IMPORTAÇÃO ADICIONADA
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import SimpleConnectionPool
@@ -6,6 +7,26 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+app = FastAPI()
+
+# --- 2. BLOCO DE CÓDIGO CORS ADICIONADO ---
+# Este bloco funciona como um "porteiro" que autoriza o seu dashboard a acessar a API.
+origins = [
+    # O "*" permite que QUALQUER site acesse sua API. Para mais segurança no futuro,
+    # você pode substituir por ["https://seu-dashboard.vercel.app", "https://seu-dashboard.streamlit.app"]
+    "*"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], # Permite todos os métodos (GET, POST, etc)
+    allow_headers=["*"], # Permite todos os cabeçalhos
+)
+# --- FIM DO BLOCO CORS ---
+
 
 pool = None
 try:
@@ -18,13 +39,12 @@ try:
 except psycopg2.OperationalError as e:
     print(f"ERRO CRÍTICO: Falha ao inicializar o pool de conexões. {e}")
 
-app = FastAPI()
 
 @app.get("/")
 def health_check():
     return {"status": "ok"}
 
-# --- MUDANÇA AQUI ---
+
 @app.get("/dados")
 def obter_dados(limit: int = 5000, offset: int = 0): # Adiciona parâmetros de paginação
     if not pool:
@@ -41,17 +61,17 @@ def obter_dados(limit: int = 5000, offset: int = 0): # Adiciona parâmetros de p
                     i.id AS codigo_integrante, i.nm_integrante,
                     CASE WHEN f.is_fundo_assessoria_pura_convertido IS TRUE THEN f.dt_conversao_ass_pura WHEN f.is_fundo_assessoria_pura_convertido IS FALSE THEN i.dt_cadastro END AS dt_cadastro_integrante,
                     f.id AS id_fundo, f.nm_fundo AS nm_fundo, c.nm_curso AS curso_fundo, CASE WHEN f.tp_servico = '1' THEN 'Pacote'
-		WHEN f.tp_servico = '2' THEN 'Assessoria'
-		WHEN f.tp_servico = '3' THEN 'Super Integrada'
-	END AS tp_servico,
+        WHEN f.tp_servico = '2' THEN 'Assessoria'
+        WHEN f.tp_servico = '3' THEN 'Super Integrada'
+    END AS tp_servico,
                     CASE WHEN (f.dt_contrato IS NULL OR f.dt_contrato > f.dt_cadastro) THEN f.dt_cadastro WHEN f.dt_contrato IS NOT NULL THEN f.dt_contrato END AS dt_contrato,
                     f.dt_cadastro AS dt_cadastro_fundo, '' AS total_lancamentos, fc.vl_plano AS vl_plano, '' AS cadastrado_por,
                     CASE WHEN us.cpf IS NULL THEN us.nome ELSE NULL END AS indicado_por,
                     CASE WHEN us.fl_consultor_comercial IS TRUE THEN 'Sim' WHEN us.fl_consultor_comercial IS FALSE THEN 'Não' END AS consultor_comercial,
                     it.nm_instituicao, i.fl_ativo AS fl_ativo, CASE
-		WHEN f.tipocliente_id = 15 THEN 'Fundo de formatura'
-		WHEN f.tipocliente_id = 17 THEN 'Pre evento'
-	END  AS tipo_cliente
+        WHEN f.tipocliente_id = 15 THEN 'Fundo de formatura'
+        WHEN f.tipocliente_id = 17 THEN 'Pre evento'
+    END  AS tipo_cliente
                 FROM tb_fundo f
                 JOIN tb_unidade u ON f.unidade_id = u.id
                 JOIN tb_integrante i ON i.fundo_id = f.id
