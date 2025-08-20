@@ -129,7 +129,6 @@ FROM
 	LEFT JOIN tb_instituicao it ON f.instituicao_id = it.id
 WHERE
 	u.categoria = '2'
-	AND i.id in (241455)
 	AND f.tipocliente_id IN (15, 17)
 	AND i.dt_cadastro >= '2019-01-01'
 	AND f.is_fundo_teste IS FALSE
